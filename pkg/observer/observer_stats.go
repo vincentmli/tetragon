@@ -10,7 +10,9 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/tetragon/pkg/bpf"
+	"github.com/cilium/tetragon/pkg/logger"
 	"github.com/cilium/tetragon/pkg/metrics/mapmetrics"
 	"github.com/cilium/tetragon/pkg/sensors"
 )
@@ -44,6 +46,54 @@ func (s *statValue) DeepCopyMapValue() bpf.MapValue {
 	}
 	copy(v.Value, s.Value)
 	return v
+}
+
+// UpdateSensorMapsLoaded updates the count of loaded sensor maps
+func UpdateSensorMapsLoaded() {
+	registeredMapNames := make(map[string]struct{})
+	mapCounts := make(map[string]int)
+
+	for _, m := range sensors.AllMaps {
+		if m == nil {
+			continue
+		}
+		// Map names in the kernel are truncated to 16 chars
+		var truncatedName = m.Name
+		if len(truncatedName) > 16 {
+			truncatedName = truncatedName[:16]
+		}
+		registeredMapNames[truncatedName] = struct{}{}
+		logger.GetLogger().WithField("name", m.Name).Debug("UpdateMapCounts: Found sensor map")
+	}
+
+	var id ebpf.MapID
+	for {
+		var err error
+		id, err = ebpf.MapGetNextID(id)
+		if err != nil {
+			break
+		}
+		m, err := ebpf.NewMapFromID(id)
+		if err != nil {
+			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateMapCounts: Failed to create map from ID")
+			continue
+		}
+		i, err := m.Info()
+		if err != nil {
+			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateMapCounts: Failed to get map info")
+			continue
+		}
+		if _, ok := registeredMapNames[i.Name]; !ok {
+			logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateMapCounts: Skipping non-sensor map")
+			continue
+		}
+		logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateMapCounts: Incrementing metrics count for map")
+		mapCounts[i.Name]++
+	}
+
+	for name, count := range mapCounts {
+		mapmetrics.SensorMapsLoaded.WithLabelValues(name).Set(float64(count))
+	}
 }
 
 func (k *Observer) startUpdateMapMetrics() {
@@ -87,6 +137,17 @@ func (k *Observer) startUpdateMapMetrics() {
 			select {
 			case <-ticker.C:
 				update()
+			}
+		}
+	}()
+
+	// Map loaded sensor map metrics
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		for {
+			UpdateSensorMapsLoaded()
+			select {
+			case <-ticker.C: // Wait for timer
 			}
 		}
 	}()
