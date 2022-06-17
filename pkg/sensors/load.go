@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/tetragon/pkg/btf"
 	"github.com/cilium/tetragon/pkg/kernels"
 	"github.com/cilium/tetragon/pkg/logger"
+	"github.com/cilium/tetragon/pkg/metrics/mapmetrics"
 	"github.com/cilium/tetragon/pkg/option"
 	"github.com/cilium/tetragon/pkg/sensors/program"
 	"github.com/cilium/tetragon/pkg/sensors/program/cgroup"
@@ -179,6 +180,7 @@ func (s *Sensor) LoadMaps(stopCtx context.Context, mapDir string) error {
 				"sensor": s.Name,
 				"map":    m.Name,
 			}).Info("map is already loaded, incrementing reference count")
+			mapmetrics.SensorMapsRefcounts.WithLabelValues(m.Name).Inc()
 			m.PinState.RefInc()
 			continue
 		}
@@ -210,6 +212,7 @@ func (s *Sensor) LoadMaps(stopCtx context.Context, mapDir string) error {
 				return fmt.Errorf("failed to pin to %s: %w", pinPath, err)
 			}
 		}
+		mapmetrics.SensorMapsRefcounts.WithLabelValues(m.Name).Inc()
 		m.PinState.RefInc()
 
 		l.WithFields(logrus.Fields{

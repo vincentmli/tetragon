@@ -5,6 +5,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/tetragon/pkg/logger"
+	"github.com/cilium/tetragon/pkg/metrics/mapmetrics"
 )
 
 // Map represents BPF maps.
@@ -25,6 +26,7 @@ func (m *Map) Unload() error {
 		log.WithField("count", m.PinState.count).Debug("Refusing to unload map as it is not loaded or is disabled")
 		return nil
 	}
+	mapmetrics.SensorMapsRefcounts.WithLabelValues(m.Name).Dec()
 	if count := m.PinState.RefDec(); count > 0 {
 		log.WithField("count", count).Debug("Reference exists, not unloading map yet")
 		return nil

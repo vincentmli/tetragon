@@ -23,6 +23,12 @@ var (
 		Help:        "The total number of copies of a sensor map that have been loaded into the kernel.",
 		ConstLabels: nil,
 	}, []string{"map_name"})
+
+	SensorMapsRefcounts = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name:        consts.MetricNamePrefix + "sensor_maps_refcounts",
+		Help:        "Reference counter values on sensor maps.",
+		ConstLabels: nil,
+	}, []string{"map_name"})
 )
 
 // Get a new handle on a mapSize metric for a mapName and totalCapacity
