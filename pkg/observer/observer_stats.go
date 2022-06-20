@@ -57,13 +57,20 @@ func UpdateSensorMapsLoaded() {
 		if m == nil {
 			continue
 		}
+
 		// Map names in the kernel are truncated to 16 chars
 		var truncatedName = m.Name
 		if len(truncatedName) > 16 {
 			truncatedName = truncatedName[:16]
 		}
+
+		logger.GetLogger().WithField("name", m.Name).Debug("UpdateSensorMapsLoaded: Found sensor map")
+
+		// Register the map name
 		registeredMapNames[truncatedName] = struct{}{}
-		logger.GetLogger().WithField("name", m.Name).Debug("UpdateMapCounts: Found sensor map")
+
+		// Update the refcount metrics
+		mapmetrics.SensorMapsRefcounts.WithLabelValues(m.Name).Set(float64(m.PinState.Count()))
 	}
 
 	var id ebpf.MapID
@@ -75,19 +82,19 @@ func UpdateSensorMapsLoaded() {
 		}
 		m, err := ebpf.NewMapFromID(id)
 		if err != nil {
-			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateMapCounts: Failed to create map from ID")
+			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateSensorMapsLoaded: Failed to create map from ID")
 			continue
 		}
 		i, err := m.Info()
 		if err != nil {
-			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateMapCounts: Failed to get map info")
+			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateSensorMapsLoaded: Failed to get map info")
 			continue
 		}
 		if _, ok := registeredMapNames[i.Name]; !ok {
-			logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateMapCounts: Skipping non-sensor map")
+			logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateSensorMapsLoaded: Skipping non-sensor map")
 			continue
 		}
-		logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateMapCounts: Incrementing metrics count for map")
+		logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateSensorMapsLoaded: Incrementing metrics count for map")
 		mapCounts[i.Name]++
 	}
 
