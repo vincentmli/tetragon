@@ -51,7 +51,10 @@ func (s *statValue) DeepCopyMapValue() bpf.MapValue {
 // UpdateSensorMapsLoaded updates the count of loaded sensor maps
 func UpdateSensorMapsLoaded() {
 	registeredMapNames := make(map[string]struct{})
-	mapCounts := make(map[string]int)
+	mapCounts := make(map[struct {
+		string
+		ebpf.MapType
+	}]int)
 
 	for _, m := range sensors.AllMaps {
 		if m == nil {
@@ -70,7 +73,15 @@ func UpdateSensorMapsLoaded() {
 		registeredMapNames[truncatedName] = struct{}{}
 
 		// Update the refcount metrics
-		mapmetrics.SensorMapsRefcounts.WithLabelValues(m.Name).Set(float64(m.PinState.Count()))
+		var typeStr string
+		type_, err := m.Type()
+		if err == nil {
+			typeStr = type_.String()
+		} else {
+			logger.GetLogger().WithField("name", m.Name).WithError(err).Debug("UpdateSensorMapsLoaded: Failed to get map type")
+			continue
+		}
+		mapmetrics.SensorMapsRefcounts.WithLabelValues(m.Name, typeStr).Set(float64(m.PinState.Count()))
 	}
 
 	var id ebpf.MapID
@@ -80,26 +91,33 @@ func UpdateSensorMapsLoaded() {
 		if err != nil {
 			break
 		}
+
 		m, err := ebpf.NewMapFromID(id)
 		if err != nil {
 			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateSensorMapsLoaded: Failed to create map from ID")
 			continue
 		}
+
 		i, err := m.Info()
 		if err != nil {
 			logger.GetLogger().WithError(err).WithField("ID", id).Debug("UpdateSensorMapsLoaded: Failed to get map info")
 			continue
 		}
+
 		if _, ok := registeredMapNames[i.Name]; !ok {
 			logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateSensorMapsLoaded: Skipping non-sensor map")
 			continue
 		}
+
 		logger.GetLogger().WithField("ID", id).WithField("name", i.Name).Debug("UpdateSensorMapsLoaded: Incrementing metrics count for map")
-		mapCounts[i.Name]++
+		mapCounts[struct {
+			string
+			ebpf.MapType
+		}{i.Name, i.Type}]++
 	}
 
-	for name, count := range mapCounts {
-		mapmetrics.SensorMapsLoaded.WithLabelValues(name).Set(float64(count))
+	for info, count := range mapCounts {
+		mapmetrics.SensorMapsLoaded.WithLabelValues(info.string, info.MapType.String()).Set(float64(count))
 	}
 }
 
