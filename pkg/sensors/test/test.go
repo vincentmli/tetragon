@@ -39,7 +39,9 @@ func AddTest() {
 }
 
 func msgToTestUnix(m *api.MsgTestEvent) *api.MsgTestEventUnix {
-	return m
+	return &api.MsgTestEventUnix {
+		MsgTestEvent: *m,
+	}
 }
 
 func handleTest(r *bytes.Reader) ([]observer.Event, error) {
