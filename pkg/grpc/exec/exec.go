@@ -113,9 +113,13 @@ func (e *Grpc) GetProcessExit(event *tetragonAPI.MsgExitEventUnix) *tetragon.Pro
 		process.RefDec()
 		tetragonProcess = process.UnsafeGetProcess()
 	} else {
-		tetragonProcess = &tetragon.Process{
-			Pid:       &wrapperspb.UInt32Value{Value: event.ProcessKey.Pid},
-			StartTime: ktime.ToProto(event.ProcessKey.Ktime),
+		if event.Info.Cached == 1 {
+			tetragonProcess = &tetragon.Process{
+				Pid:       &wrapperspb.UInt32Value{Value: event.ProcessKey.Pid},
+				StartTime: ktime.ToProto(event.ProcessKey.Ktime),
+			}
+		} else {
+			tetragonProcess = nil
 		}
 	}
 	if parent != nil {
@@ -132,7 +136,8 @@ func (e *Grpc) GetProcessExit(event *tetragonAPI.MsgExitEventUnix) *tetragon.Pro
 		Signal:  signal,
 		Status:  code,
 	}
-	if e.eventCache.Needed(tetragonProcess) {
+	if e.eventCache.Needed(tetragonProcess) && event.Info.Cached == 0 {
+		event.Info.Cached = 1
 		e.eventCache.Add(process, tetragonEvent, ktime.ToProto(event.Common.Ktime), event)
 		return nil
 	}

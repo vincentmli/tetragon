@@ -129,8 +129,8 @@ type MsgProcess struct {
 }
 
 type MsgExitInfo struct {
-	Code uint32 `align:"code"`
-	Pad1 uint32 `align:"pad"`
+	Code   uint32 `align:"code"`
+	Cached uint32 `align:"pad"` // not shared with the kernel
 }
 
 type MsgExitEvent struct {
