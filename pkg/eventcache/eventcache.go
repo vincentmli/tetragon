@@ -25,7 +25,7 @@ const (
 
 // garbage collection run interval
 const (
-	eventRetryTimer = time.Second * 10
+	eventRetryTimer = time.Second * 1
 )
 
 type eventObj interface {
